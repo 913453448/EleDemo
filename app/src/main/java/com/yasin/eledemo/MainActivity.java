@@ -45,7 +45,6 @@ public class MainActivity extends AppCompatActivity implements Animator.Animator
         drawable.setTint(Color.RED);
 
 
-
         MaterialProgressDrawable drawable1=new MaterialProgressDrawable(this,container);
         drawable1.showArrow(true);
         drawable1.setArrowScale(1);

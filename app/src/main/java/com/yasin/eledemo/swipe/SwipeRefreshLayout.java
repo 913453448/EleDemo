@@ -37,11 +37,14 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewGroup;
+import android.view.animation.AccelerateDecelerateInterpolator;
 import android.view.animation.Animation;
 import android.view.animation.Animation.AnimationListener;
 import android.view.animation.DecelerateInterpolator;
 import android.view.animation.Transformation;
 import android.widget.AbsListView;
+
+import com.yasin.eledemo.R;
 
 /**
  * The SwipeRefreshLayout should be used whenever the user can refresh the
@@ -95,7 +98,7 @@ public class SwipeRefreshLayout extends ViewGroup implements NestedScrollingPare
 
     private static final int ANIMATE_TO_TRIGGER_DURATION = 200;
 
-    private static final int ANIMATE_TO_START_DURATION = 200;
+    private static final int ANIMATE_TO_START_DURATION = 1000;
 
     // Default background for the progress spinner
     private static final int CIRCLE_BG_LIGHT = 0xFFFAFAFA;
@@ -167,6 +170,9 @@ public class SwipeRefreshLayout extends ViewGroup implements NestedScrollingPare
     boolean mUsingCustomStart;
 
     private OnChildScrollUpCallback mChildScrollUpCallback;
+
+
+    private View mHeadView;
 
     private Animation.AnimationListener mRefreshListener = new Animation.AnimationListener() {
         @Override
@@ -592,6 +598,7 @@ public class SwipeRefreshLayout extends ViewGroup implements NestedScrollingPare
         return mRefreshing;
     }
 
+    private float originHeaderMargin;
     private void ensureTarget() {
         // Don't bother getting the parent height if the parent hasn't been laid
         // out yet.
@@ -601,6 +608,17 @@ public class SwipeRefreshLayout extends ViewGroup implements NestedScrollingPare
                 if (!child.equals(mCircleView)) {
                     mTarget = child;
                     break;
+                }
+            }
+        }
+        if(mTarget!=null){
+            mHeadView=mTarget.findViewById(R.id.id_head_view);
+            if(mHeadView!=null&&mHeadView.getLayoutParams() instanceof MarginLayoutParams){
+                MarginLayoutParams lp= (MarginLayoutParams) mHeadView.getLayoutParams();
+                if(originHeaderMargin==0){
+                    originHeaderMargin=lp.topMargin;
+                    headerBackAni.setDuration(ANIMATE_TO_START_DURATION);
+                    headerBackAni.setInterpolator(new AccelerateDecelerateInterpolator());
                 }
             }
         }
@@ -1017,6 +1035,7 @@ public class SwipeRefreshLayout extends ViewGroup implements NestedScrollingPare
 
         if (mReturningToStart && action == MotionEvent.ACTION_DOWN) {
             mReturningToStart = false;
+            mProgress.stop();
         }
 
         if (!isEnabled() || mReturningToStart || canChildScrollUp()
@@ -1029,6 +1048,7 @@ public class SwipeRefreshLayout extends ViewGroup implements NestedScrollingPare
             case MotionEvent.ACTION_DOWN:
                 mActivePointerId = ev.getPointerId(0);
                 mIsBeingDragged = false;
+                mProgress.stop();
                 break;
 
             case MotionEvent.ACTION_MOVE: {
@@ -1044,7 +1064,9 @@ public class SwipeRefreshLayout extends ViewGroup implements NestedScrollingPare
                 if (mIsBeingDragged) {
                     final float overscrollTop = (y - mInitialMotionY) * DRAG_RATE;
                     if (overscrollTop > 0) {
+                        Log.e("TAG", "onTouchEvent:--->"+overscrollTop);
                         moveSpinner(overscrollTop);
+                        setHeaderMarginOffset(overscrollTop/2);
                     } else {
                         return false;
                     }
@@ -1078,6 +1100,8 @@ public class SwipeRefreshLayout extends ViewGroup implements NestedScrollingPare
                     final float overscrollTop = (y - mInitialMotionY) * DRAG_RATE;
                     mIsBeingDragged = false;
                     finishSpinner(overscrollTop);
+                    startHeaderBackAni();
+                    mProgress.stop();
                 }
                 mActivePointerId = INVALID_POINTER;
                 return false;
@@ -1088,6 +1112,31 @@ public class SwipeRefreshLayout extends ViewGroup implements NestedScrollingPare
 
         return true;
     }
+    private void startHeaderBackAni(){
+        mHeadView.clearAnimation();
+        mHeadView.startAnimation(headerBackAni);
+    }
+
+    private void setHeaderMarginOffset(float offset) {
+        if (mHeadView != null && mHeadView.getLayoutParams() instanceof MarginLayoutParams) {
+            MarginLayoutParams lp = (MarginLayoutParams) mHeadView.getLayoutParams();
+            lp.topMargin = (int) (originHeaderMargin+offset);
+            mHeadView.setLayoutParams(lp);
+        }
+    }
+    private final Animation headerBackAni=new Animation() {
+        @Override
+        protected void applyTransformation(float interpolatedTime, Transformation t) {
+            if (mHeadView != null && mHeadView.getLayoutParams() instanceof MarginLayoutParams) {
+                MarginLayoutParams lp = (MarginLayoutParams) mHeadView.getLayoutParams();
+                float startMargin=lp.topMargin;
+                float endMargin= originHeaderMargin;
+                float margin=startMargin+(endMargin-startMargin)*interpolatedTime;
+                lp.topMargin= (int) margin;
+                mHeadView.setLayoutParams(lp);
+            }
+        }
+    };
 
     @SuppressLint("NewApi")
     private void startDragging(float y) {
@@ -1191,7 +1240,6 @@ public class SwipeRefreshLayout extends ViewGroup implements NestedScrollingPare
             invalidate();
         }
     }
-
     private void onSecondaryPointerUp(MotionEvent ev) {
         final int pointerIndex = MotionEventCompat.getActionIndex(ev);
         final int pointerId = ev.getPointerId(pointerIndex);
